@@ -52,9 +52,14 @@ export const connectToSocket = (server) => {
             // Tell the user if they are host
             socket.emit("is-host", meetingHosts[path] === socket.id);
 
-            for (let a = 0; a < connections[path].length; a++) {
-                io.to(connections[path][a]).emit("user-joined", socket.id, connections[path])
-            }
+            const clientsInfo = connections[path].map(id => ({
+                socketId: id,
+                username: socketUserMap[id]?.username
+            }));
+
+            connections[path].forEach((elem) => {
+                io.to(elem).emit("user-joined", socket.id, connections[path], clientsInfo);
+            });
 
             if (messages[path] !== undefined) {
                 for (let a = 0; a < messages[path].length; ++a) {
@@ -78,9 +83,14 @@ export const connectToSocket = (server) => {
                     io.to(targetSocketId).emit("waiting-room-status", false);
                     io.to(targetSocketId).emit("is-host", false);
 
-                    for (let a = 0; a < connections[path].length; a++) {
-                        io.to(connections[path][a]).emit("user-joined", targetSocketId, connections[path])
-                    }
+                    const clientsInfo = connections[path].map(id => ({
+                        socketId: id,
+                        username: socketUserMap[id]?.username
+                    }));
+
+                    connections[path].forEach((elem) => {
+                        io.to(elem).emit("user-joined", targetSocketId, connections[path], clientsInfo);
+                    });
                 }
             }
         })

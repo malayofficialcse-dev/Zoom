@@ -291,10 +291,13 @@ export default function VideoMeetComponent() {
                 setVideos((videos) => videos.filter((video) => video.socketId !== id))
             })
 
-            socketRef.current.on('user-joined', (id, clients) => {
+            socketRef.current.on('user-joined', (id, clients, clientsInfo) => {
                 clients.forEach((socketListId) => {
                     if (socketListId === socketIdRef.current) return;
                     if (connections[socketListId]) return;
+
+                    const userRecord = clientsInfo.find(c => c.socketId === socketListId);
+                    const remoteUsername = userRecord ? userRecord.username : `User ${socketListId.substring(0, 4)}`;
 
                     connections[socketListId] = new RTCPeerConnection(peerConfigConnections)
                     connections[socketListId].onicecandidate = function (event) {
@@ -309,7 +312,7 @@ export default function VideoMeetComponent() {
                         if (videoExists) {
                             setVideos(videos => {
                                 const updatedVideos = videos.map(video =>
-                                    video.socketId === socketListId ? { ...video, stream: event.stream } : video
+                                    video.socketId === socketListId ? { ...video, stream: event.stream, username: remoteUsername } : video
                                 );
                                 videoRef.current = updatedVideos;
                                 return updatedVideos;
@@ -319,7 +322,8 @@ export default function VideoMeetComponent() {
                                 socketId: socketListId,
                                 stream: event.stream,
                                 autoplay: true,
-                                playsinline: true
+                                playsinline: true,
+                                username: remoteUsername
                             };
 
                             setVideos(videos => {
@@ -343,7 +347,6 @@ export default function VideoMeetComponent() {
                     for (let id2 in connections) {
                         if (id2 === socketIdRef.current) continue;
                         
-                        // We are the joiner, we initiate calls to everyone else
                         connections[id2].createOffer().then((description) => {
                             connections[id2].setLocalDescription(description)
                                 .then(() => {
@@ -639,6 +642,7 @@ export default function VideoMeetComponent() {
                                     ref={localVideoref} 
                                     autoPlay 
                                     muted 
+                                    playsInline
                                     className="w-full h-full object-cover mirror"
                                 />
                                 {!videoAvailable && (
@@ -678,18 +682,20 @@ export default function VideoMeetComponent() {
                         </div>
                         
                         {/* Video Grid */}
-                        <div className={`flex-1 grid gap-6 ${
+                        <div className={`flex-1 grid gap-4 md:gap-6 ${
                             videos.length === 0 ? 'grid-cols-1' : 
                             videos.length === 1 ? 'grid-cols-1 md:grid-cols-2' : 
-                            'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-                        } auto-rows-fr`}>
+                            videos.length === 2 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' :
+                            'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                        } auto-rows-fr overflow-y-auto custom-scrollbar pr-1`}>
                             
                             {/* Local Video */}
-                            <div className="relative rounded-[2.5rem] bg-slate-200 dark:bg-slate-900 border-4 border-white dark:border-slate-800 overflow-hidden group shadow-2xl transition-all duration-500 hover:scale-[1.01]">
+                            <div className="relative rounded-2xl md:rounded-[2.5rem] bg-slate-200 dark:bg-slate-900 border-2 md:border-4 border-white dark:border-slate-800 overflow-hidden group shadow-2xl transition-all duration-500 hover:scale-[1.01]">
                                 <video 
                                     ref={localVideoref} 
                                     autoPlay 
                                     muted 
+                                    playsInline
                                     className="w-full h-full object-cover mirror"
                                 />
                                 <div className="absolute bottom-6 left-6 px-4 py-2 bg-black/40 backdrop-blur-xl rounded-xl text-xs font-black text-white border border-white/10 flex items-center gap-2">
@@ -715,7 +721,7 @@ export default function VideoMeetComponent() {
 
                             {/* Remote Videos */}
                             {videos.map((v) => (
-                                <div key={v.socketId} className="relative rounded-[2.5rem] bg-slate-200 dark:bg-slate-900 border-4 border-white dark:border-slate-800 overflow-hidden shadow-2xl transition-all duration-500 hover:scale-[1.01]">
+                                <div key={v.socketId} className="relative rounded-2xl md:rounded-[2.5rem] bg-slate-200 dark:bg-slate-900 border-2 md:border-4 border-white dark:border-slate-800 overflow-hidden shadow-2xl transition-all duration-500 hover:scale-[1.01]">
                                     <video
                                         data-socket={v.socketId}
                                         ref={ref => {
@@ -724,10 +730,11 @@ export default function VideoMeetComponent() {
                                             }
                                         }}
                                         autoPlay
+                                        playsInline
                                         className="w-full h-full object-cover"
                                     />
-                                    <div className="absolute bottom-6 left-6 px-4 py-2 bg-black/40 backdrop-blur-xl rounded-xl text-xs font-black text-white border border-white/10">
-                                         PARTICIPANT {v.socketId.substring(0, 4).toUpperCase()}
+                                    <div className="absolute bottom-3 left-3 md:bottom-6 md:left-6 px-3 py-1 md:px-4 md:py-2 bg-black/40 backdrop-blur-xl rounded-lg md:rounded-xl text-[10px] md:text-xs font-black text-white border border-white/10">
+                                         {v.username || `PARTICIPANT ${v.socketId.substring(0, 4).toUpperCase()}`}
                                     </div>
                                     {raisedHands[v.socketId] && (
                                         <div className="absolute top-6 right-6 w-12 h-12 bg-orange-500 text-white rounded-2xl flex items-center justify-center shadow-2xl animate-bounce border-4 border-white dark:border-slate-800">
@@ -796,12 +803,12 @@ export default function VideoMeetComponent() {
                                 </div>
                             )}
 
-                            <div className="h-24 flex items-center justify-center gap-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-slate-200 dark:border-white/10 px-8 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
+                            <div className="h-20 md:h-24 max-w-[95vw] overflow-x-auto no-scrollbar flex items-center justify-start md:justify-center gap-2 md:gap-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-slate-200 dark:border-white/10 px-4 md:px-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)]">
                                 
                                 <button 
                                     onClick={handleAudio}
                                     title={audio ? "Mute Mic" : "Unmute Mic"}
-                                    className={`p-4 rounded-2xl transition-all transform hover:scale-110 active:scale-90 ${audio ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-rose-500 text-white shadow-lg shadow-rose-500/30'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all transform hover:scale-110 active:scale-90 flex-shrink-0 ${audio ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-rose-500 text-white shadow-lg shadow-rose-500/30'}`}
                                 >
                                     {audio ? (
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
@@ -817,7 +824,7 @@ export default function VideoMeetComponent() {
                                 <button 
                                     onClick={handleVideo}
                                     title={video ? "Turn Camera Off" : "Turn Camera On"}
-                                    className={`p-4 rounded-2xl transition-all transform hover:scale-110 active:scale-90 ${video ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-rose-500 text-white shadow-lg shadow-rose-500/30'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all transform hover:scale-110 active:scale-90 flex-shrink-0 ${video ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-rose-500 text-white shadow-lg shadow-rose-500/30'}`}
                                 >
                                     {video ? (
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
@@ -833,9 +840,9 @@ export default function VideoMeetComponent() {
                                 <button 
                                     onClick={handleEndCall}
                                     title="Leave Meeting"
-                                    className="p-5 rounded-3xl bg-rose-600 hover:bg-rose-700 text-white transition-all transform hover:scale-125 hover:-rotate-12 active:scale-95 shadow-xl shadow-rose-600/30"
+                                    className="p-4 md:p-5 rounded-2xl md:rounded-3xl bg-rose-600 hover:bg-rose-700 text-white transition-all transform hover:scale-110 md:hover:scale-125 md:hover:-rotate-12 active:scale-95 shadow-xl shadow-rose-600/30 flex-shrink-0"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 md:w-8 md:h-8">
                                       <path fillRule="evenodd" d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" clipRule="evenodd" />
                                     </svg>
                                 </button>
@@ -844,7 +851,7 @@ export default function VideoMeetComponent() {
                                     <button 
                                         onClick={handleScreen}
                                         title={screen ? "Stop Presenting" : "Present Screen"}
-                                        className={`p-4 rounded-2xl transition-all transform hover:scale-110 active:scale-90 ${screen ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                        className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all transform hover:scale-110 active:scale-90 flex-shrink-0 ${screen ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                           <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
@@ -855,7 +862,7 @@ export default function VideoMeetComponent() {
                                 <button 
                                     onClick={() => setShowWhiteboard(!showWhiteboard)}
                                     title="Open Whiteboard"
-                                    className={`p-4 rounded-2xl transition-all transform hover:scale-110 active:scale-90 ${showWhiteboard ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all transform hover:scale-110 active:scale-90 flex-shrink-0 ${showWhiteboard ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
@@ -865,7 +872,7 @@ export default function VideoMeetComponent() {
                                  <button 
                                     onClick={() => { setModal(!showModal); setNewMessages(0); }}
                                     title="Chat"
-                                    className={`p-4 rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 ${showModal ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 flex-shrink-0 ${showModal ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3h9m-9 3h3m-6.75 4.125h12c.345 0 .679-.038 1-.11a12.871 12.871 0 0 1-3.158-1.78l-4.508-2.93a1.5 1.5 0 0 0-1.666 0l-4.508 2.93a12.87 12.87 0 0 1-3.158 1.78c.321.072.655.11 1 .11Z" />
@@ -880,14 +887,14 @@ export default function VideoMeetComponent() {
                                 <button 
                                     onClick={toggleHandRaise}
                                     title="Raise Hand"
-                                    className={`p-4 rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 ${raisedHands[socketIdRef.current] ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 flex-shrink-0 ${raisedHands[socketIdRef.current] ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                 >
                                     <span className="text-xl">✋</span>
                                 </button>
 
-                                <div className="group relative">
+                                <div className="group relative flex-shrink-0">
                                     <button 
-                                        className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-all transform hover:scale-110 active:scale-90"
+                                        className="p-3 md:p-4 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-all transform hover:scale-110 active:scale-90"
                                     >
                                         <span className="text-xl">😊</span>
                                     </button>
@@ -907,7 +914,7 @@ export default function VideoMeetComponent() {
                                 <button 
                                     onClick={() => setShowPolls(!showPolls)}
                                     title="Polls & Q&A"
-                                    className={`p-4 rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 ${showPolls ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 flex-shrink-0 ${showPolls ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
@@ -917,7 +924,7 @@ export default function VideoMeetComponent() {
                                 <button 
                                     onClick={() => setShowBreakout(!showBreakout)}
                                     title="Breakout Rooms"
-                                    className={`p-4 rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 ${showBreakout ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all relative transform hover:scale-110 active:scale-90 flex-shrink-0 ${showBreakout ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
@@ -927,19 +934,19 @@ export default function VideoMeetComponent() {
                                 <button 
                                     onClick={togglePiP}
                                     title="Picture in Picture"
-                                    className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-all transform hover:scale-110 active:scale-90"
+                                    className="p-3 md:p-4 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-all transform hover:scale-110 active:scale-90 flex-shrink-0"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125Z" />
                                     </svg>
                                 </button>
 
-                                <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-2"></div>
+                                <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-2 flex-shrink-0"></div>
 
                                 <button 
                                     onClick={isRecording ? stopRecording : startRecording}
                                     title={isRecording ? "Stop Recording" : "Record Meeting"}
-                                    className={`p-4 rounded-2xl transition-all transform hover:scale-110 active:scale-90 ${isRecording ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all transform hover:scale-110 active:scale-90 flex-shrink-0 ${isRecording ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                 >
                                     <div className="relative">
                                         {isRecording && <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-ping"></div>}
@@ -950,12 +957,12 @@ export default function VideoMeetComponent() {
                                 </button>
 
                                 {isHost && (
-                                    <div className="flex gap-4">
+                                    <div className="flex gap-2 md:gap-4 flex-shrink-0">
                                         <div className="h-8 w-px bg-slate-200 dark:bg-white/10 mx-2"></div>
                                         <button 
                                             onClick={hostMuteAll}
                                             title="Mute Everyone"
-                                            className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-rose-500 hover:text-white transition-all transform hover:scale-110 active:scale-90"
+                                            className="p-3 md:p-4 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-rose-500 hover:text-white transition-all transform hover:scale-110 active:scale-90 flex-shrink-0"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.5a2.25 2.25 0 0 1-2.25-2.25V9a2.25 2.25 0 0 1 2.25-2.25h2.25Z" />
@@ -964,7 +971,7 @@ export default function VideoMeetComponent() {
                                         <button 
                                             onClick={hostLockMeeting}
                                             title={isLocked ? "Unlock Meeting" : "Lock Meeting"}
-                                            className={`p-4 rounded-2xl transition-all transform hover:scale-110 active:scale-90 ${isLocked ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                            className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all transform hover:scale-110 active:scale-90 flex-shrink-0 ${isLocked ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                                               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
@@ -1154,6 +1161,13 @@ export default function VideoMeetComponent() {
             )}
 
             <style>{`
+                .no-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .no-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
                 .mirror {
                     transform: scaleX(-1);
                 }
