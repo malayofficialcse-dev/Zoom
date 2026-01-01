@@ -4,6 +4,7 @@ import bcrypt, { hash } from "bcrypt"
 
 import crypto from "crypto"
 import { Meeting } from "../models/meeting.model.js";
+import { Analytics } from "../models/analytics.model.js";
 const login = async (req, res) => {
 
     const { username, password } = req.body;
@@ -98,4 +99,75 @@ const addToHistory = async (req, res) => {
 }
 
 
-export { login, register, getUserHistory, addToHistory }
+const getUserAnalytics = async (req, res) => {
+    const { token } = req.query;
+
+    try {
+        const user = await User.findOne({ token: token });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        const analytics = await Analytics.find({ user_id: user.username }).sort({ createdAt: -1 });
+        
+        // Aggregate some data
+        const totalMeetings = analytics.length;
+        const totalDuration = analytics.reduce((acc, curr) => acc + curr.duration, 0);
+        const avgParticipantCount = totalMeetings > 0 
+            ? (analytics.reduce((acc, curr) => acc + curr.participantCount, 0) / totalMeetings).toFixed(1)
+            : 0;
+
+        res.json({
+            analytics,
+            summary: {
+                totalMeetings,
+                totalDuration, // in seconds
+                avgParticipantCount
+            }
+        });
+    } catch (e) {
+        res.status(500).json({ message: `Something went wrong ${e}` });
+    }
+}
+
+const scheduleMeeting = async (req, res) => {
+    const { token, meetingCode, title, description, startTime, endTime } = req.body;
+
+    try {
+        const user = await User.findOne({ token: token });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        const newMeeting = new Meeting({
+            user_id: user.username,
+            meetingCode,
+            title,
+            description,
+            startTime,
+            endTime
+        });
+
+        await newMeeting.save();
+        res.status(201).json({ message: "Meeting scheduled successfully", meeting: newMeeting });
+    } catch (e) {
+        res.status(500).json({ message: `Something went wrong ${e}` });
+    }
+}
+
+const getScheduledMeetings = async (req, res) => {
+    const { token } = req.query;
+
+    try {
+        const user = await User.findOne({ token: token });
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        const meetings = await Meeting.find({ 
+            user_id: user.username, 
+            status: 'scheduled',
+            startTime: { $gte: new Date() }
+        }).sort({ startTime: 1 });
+
+        res.json(meetings);
+    } catch (e) {
+        res.status(500).json({ message: `Something went wrong ${e}` });
+    }
+}
+
+export { login, register, getUserHistory, addToHistory, getUserAnalytics, scheduleMeeting, getScheduledMeetings }
