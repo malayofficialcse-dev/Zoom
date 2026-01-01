@@ -35,9 +35,13 @@ const frontendPath = path.join(__dirname, "../../frontend/build");
 app.use(express.static(frontendPath));
 
 // AFTER all other routes, handle any that don't match with index.html
-app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendPath, "index.html"));
-});
+// app.get("*", (req, res) => {
+//     res.sendFile(path.join(frontendPath, "index.html"));
+// });
+
+app.get('/',(req,res)=>{
+    res.send("Zoom backend is ok");
+})
 
 const start = async () => {
     try {
