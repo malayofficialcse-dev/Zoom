@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {useCallback, useEffect, useRef, useState } from 'react';
 
 export default function Whiteboard({ socket }) {
     const canvasRef = useRef(null);
@@ -6,6 +6,23 @@ export default function Whiteboard({ socket }) {
     const [isDrawing, setIsDrawing] = useState(false);
     const [color, setColor] = useState('#ff9839');
     const [width, setWidth] = useState(3);
+
+    const drawOnCanvas = useCallback((x0, y0, x1, y1, strokeColor, strokeWidth, emit = true) => {
+        const context = contextRef.current;
+        if (!context) return;
+
+        context.beginPath();
+        context.moveTo(x0, y0);
+        context.lineTo(x1, y1);
+        context.strokeStyle = strokeColor;
+        context.lineWidth = strokeWidth;
+        context.stroke();
+        context.closePath();
+
+        if (emit && socket) {
+            socket.emit('whiteboard-data', { x0, y0, x1, y1, color: strokeColor, width: strokeWidth });
+        }
+    }, [socket]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -42,8 +59,8 @@ export default function Whiteboard({ socket }) {
 
         if (socket) {
             socket.on('whiteboard-data', (data) => {
-                const { x0, y0, x1, y1, color, width } = data;
-                drawOnCanvas(x0, y0, x1, y1, color, width, false);
+                const { x0, y0, x1, y1, color: remoteColor, width: remoteWidth } = data;
+                drawOnCanvas(x0, y0, x1, y1, remoteColor, remoteWidth, false);
             });
         }
 
@@ -51,31 +68,7 @@ export default function Whiteboard({ socket }) {
             window.removeEventListener('resize', handleResize);
             if (socket) socket.off('whiteboard-data');
         };
-    }, []);
-
-    useEffect(() => {
-        if (contextRef.current) {
-            contextRef.current.strokeStyle = color;
-            contextRef.current.lineWidth = width;
-        }
-    }, [color, width]);
-
-    const drawOnCanvas = (x0, y0, x1, y1, strokeColor, strokeWidth, emit = true) => {
-        const context = contextRef.current;
-        if (!context) return;
-
-        context.beginPath();
-        context.moveTo(x0, y0);
-        context.lineTo(x1, y1);
-        context.strokeStyle = strokeColor;
-        context.lineWidth = strokeWidth;
-        context.stroke();
-        context.closePath();
-
-        if (emit && socket) {
-            socket.emit('whiteboard-data', { x0, y0, x1, y1, color: strokeColor, width: strokeWidth });
-        }
-    };
+    }, [color, width, socket, drawOnCanvas]);
 
     const startDrawing = ({ nativeEvent }) => {
         const { offsetX, offsetY } = nativeEvent;
